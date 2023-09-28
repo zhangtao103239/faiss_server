@@ -9,7 +9,7 @@ import os
 from typing import List
 import numpy as np
 
-FAISS_DATA_PATH = os.getenv("FAISS_DATA_PATH", "/app/data/faiss_data.index")
+FAISS_DATA_PATH = os.getenv("FAISS_DATA_PATH", "/app/faiss_data.index")
 
 def get_data_faiss():
     faiss_location_file = FAISS_DATA_PATH
@@ -94,6 +94,10 @@ def delete_data(deleteData: List[int] = Body(default=[],
     data_index.remove_ids(ids)
     return {"message": "Delete data success", "status": 200, "data": data_index.ntotal}
 
+@app.post('/clear')
+def clear_data(data_index=Depends(get_data_faiss)):
+    data_index.reset()
+    return {"message": "Clear data success", "status": 200, "data": data_index.ntotal}
 
 @app.get("/data_amount")
 def data_amount(data_index=Depends(get_data_faiss)):
