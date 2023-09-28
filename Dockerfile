@@ -1,4 +1,4 @@
-FROM 10.4.7.100:31104/library/python:3.9.17-bullseye
+FROM python:bullseye
 WORKDIR /app
 # COPY bge-base-zh-v1.5 /app/bge-base-zh-v1.5
 COPY tini-amd64 /app/tini
