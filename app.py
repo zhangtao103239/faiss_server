@@ -1,6 +1,7 @@
 from FlagEmbedding import FlagModel
 import faiss
-from fastapi import FastAPI, Depends, Body
+from fastapi import FastAPI, Depends, Body, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 from py_eureka_client import eureka_client
@@ -9,31 +10,36 @@ import os
 from typing import List
 import numpy as np
 
-FAISS_DATA_PATH = os.getenv("FAISS_DATA_PATH", "./faiss_data.index")
+data_index = None
+flag_model = None
+
+FAISS_DATA_PATH = "./faiss_data.index"
 
 def get_data_faiss():
-    faiss_location_file = FAISS_DATA_PATH
-    if os.path.exists(faiss_location_file):
-        data_index = faiss.read_index(faiss_location_file)
+    global data_index
+    if data_index is not None:
+        yield data_index
+    elif os.path.exists(FAISS_DATA_PATH):
+        data_index = faiss.read_index(FAISS_DATA_PATH)
+        yield data_index
     else:
         data_index = faiss.index_factory(
-            768, "HNSW32,IDMap", faiss.METRIC_INNER_PRODUCT)
-    try:
+                768, "HNSW32,IDMap", faiss.METRIC_INNER_PRODUCT)
         yield data_index
-    finally:
-        faiss.write_index(data_index, faiss_location_file)
-
+    faiss.write_index(data_index, FAISS_DATA_PATH)
 
 def get_flag_model():
-    # 'BAAI/bge-small-zh-v1.5'
-    flag_model = FlagModel(
-        'BAAI/bge-small-zh-v1.5', query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=False)
-    return flag_model
+    global flag_model
+    if flag_model is not None:
+        return flag_model
+    else:
+        flag_model = FlagModel(
+            'BAAI/bge-small-zh-v1.5', query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=False)
+        return flag_model
 
 
 app = FastAPI()
 server_port = 8000
-
 
 class InsertDataModel(BaseModel):
     data: str
@@ -64,7 +70,8 @@ async def startup_event():
             instance_ip=ip,
             instance_port=server_port,
         )
-
+    get_data_faiss()
+    get_flag_model()
 
 @app.get("/")
 def root():
@@ -79,21 +86,23 @@ def insert_data(insertData: List[InsertDataModel] = Body(default=[],
         return {"message": "No data to insert", "status": 400, "data": data_index.ntotal}
     data = [item.data for item in insertData]
     ids = np.array([item.id for item in insertData]).astype(np.int32)
-    data_index.remove_ids(ids)
     encodedData = flag_model.encode(data)
     data_index.add_with_ids(encodedData, ids)
     return {"message": "Insert data success", "status": 200, "data": data_index.ntotal}
 
+@app.post('/export')
+def export_index(data_index=Depends(get_data_faiss)):
+    faiss.write_index(data_index, FAISS_DATA_PATH)
+    return FileResponse(FAISS_DATA_PATH, filename="faiss_data.index", media_type="application/octet-stream")
 
-@app.post("/delete")
-def delete_data(deleteData: List[int] = Body(default=[],
-                                             example=[1022, 1023, 1024, 1025, 1026]),
-                data_index=Depends(get_data_faiss)):
-    if deleteData == []:
-        return {"message": "No data to delete", "status": 400, "data": data_index.ntotal}
-    ids = np.array(deleteData).astype(np.int32)
-    data_index.remove_ids(ids)
-    return {"message": "Delete data success", "status": 200, "data": data_index.ntotal}
+@app.post('/import')
+async def import_index(data_file: UploadFile):
+    global data_index
+    content = await data_file.read()
+    with open(FAISS_DATA_PATH, "wb") as f:
+        f.write(content)
+    data_index = faiss.read_index(FAISS_DATA_PATH)
+    return {"message": "Import data success", "status": 200, "data": data_index.ntotal}
 
 @app.post('/clear')
 def clear_data(data_index=Depends(get_data_faiss)):
