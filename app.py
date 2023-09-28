@@ -26,7 +26,7 @@ def get_data_faiss():
 
 def get_flag_model():
     flag_model = FlagModel(
-        'BAAI//bge-small-zh-v1.5', query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=False)
+        'BAAI/bge-small-zh-v1.5', query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=False)
     return flag_model
 
 
