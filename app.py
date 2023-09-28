@@ -9,7 +9,7 @@ import os
 from typing import List
 import numpy as np
 
-FAISS_DATA_PATH = os.getenv("FAISS_DATA_PATH", "/app/faiss_data.index")
+FAISS_DATA_PATH = os.getenv("FAISS_DATA_PATH", "./faiss_data.index")
 
 def get_data_faiss():
     faiss_location_file = FAISS_DATA_PATH
@@ -17,7 +17,7 @@ def get_data_faiss():
         data_index = faiss.read_index(faiss_location_file)
     else:
         data_index = faiss.index_factory(
-            768, "IDMap,Flat", faiss.METRIC_INNER_PRODUCT)
+            768, "HNSW32,IDMap", faiss.METRIC_INNER_PRODUCT)
     try:
         yield data_index
     finally:
@@ -25,6 +25,7 @@ def get_data_faiss():
 
 
 def get_flag_model():
+    # 'BAAI/bge-small-zh-v1.5'
     flag_model = FlagModel(
         'BAAI/bge-small-zh-v1.5', query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=False)
     return flag_model
