@@ -24,7 +24,7 @@ def get_data_faiss():
         yield data_index
     else:
         data_index = faiss.index_factory(
-                768, "HNSW32,IDMap", faiss.METRIC_INNER_PRODUCT)
+                768, "Flat,IDMap", faiss.METRIC_INNER_PRODUCT)
         yield data_index
     faiss.write_index(data_index, FAISS_DATA_PATH)
 
@@ -86,6 +86,10 @@ def insert_data(insertData: List[InsertDataModel] = Body(default=[],
         return {"message": "No data to insert", "status": 400, "data": data_index.ntotal}
     data = [item.data for item in insertData]
     ids = np.array([item.id for item in insertData]).astype(np.int32)
+    try: 
+        data_index.remove_ids(ids)
+    except Exception as e:
+        print(e)
     encodedData = flag_model.encode(data)
     data_index.add_with_ids(encodedData, ids)
     return {"message": "Insert data success", "status": 200, "data": data_index.ntotal}
@@ -108,6 +112,13 @@ async def import_index(data_file: UploadFile):
 def clear_data(data_index=Depends(get_data_faiss)):
     data_index.reset()
     return {"message": "Clear data success", "status": 200, "data": data_index.ntotal}
+
+
+@app.post('/delete')
+def delete_data(ids: List[int], data_index=Depends(get_data_faiss)):
+    data_index.remove_ids(np.array(ids).astype(np.int64))
+    return {"message": "Delete data success", "status": 200, "data": data_index.ntotal}
+
 
 @app.get("/data_amount")
 def data_amount(data_index=Depends(get_data_faiss)):
